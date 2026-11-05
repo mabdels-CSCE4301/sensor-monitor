@@ -7,3 +7,6 @@ Mohamed AbdElSalam
 Date:
 5 November 2026
 
+Milestones:
+ 1) Git 
+
