@@ -1,9 +1,9 @@
-Description 
+Description: 
 AI-Assisted Software Development with VS Code, Git, Claude & GitHub Spec Kit
 
-Author
+Author:
 Mohamed AbdElSalam
 
-Date
+Date:
 5 November 2026
 
