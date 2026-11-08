@@ -1,67 +1,110 @@
-import os
+import ast
+import re
 from typing import Any
 
-import requests
-from flask import Flask, render_template, request
+from flask import Flask, jsonify, request, send_from_directory
 
-app = Flask(__name__)
-
-API_KEY = os.getenv("OPENWEATHER_API_KEY")
-WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+app = Flask(__name__, static_folder="static")
 
 
-def get_weather(city: str) -> dict[str, Any]:
-    if not city or not city.strip():
-        raise ValueError("Please enter a city name.")
+def _safe_numeric(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid numeric value: {value!r}") from exc
 
-    if not API_KEY:
-        raise RuntimeError("Missing OPENWEATHER_API_KEY environment variable.")
 
-    response = requests.get(
-        WEATHER_URL,
-        params={
-            "q": city,
-            "appid": API_KEY,
-            "units": "metric",
-        },
-        timeout=10,
-    )
+def _evaluate_expression(expression: str) -> float:
+    sanitized = expression.strip()
+    if not sanitized:
+        raise ValueError("Expression is empty")
 
-    if response.status_code != 200:
-        raise ValueError(f"Could not find weather for '{city}'.")
+    sanitized = sanitized.replace("×", "*").replace("÷", "/").replace("^", "**")
+    if not re.fullmatch(r"[0-9\s+\-*/().%]+", sanitized):
+        raise ValueError("Expression contains unsupported characters")
 
-    data = response.json()
-    weather = data.get("weather", [{}])[0]
-    main = data.get("main", {})
-    sys_data = data.get("sys", {})
+    try:
+        tree = ast.parse(sanitized, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError("Invalid arithmetic expression") from exc
 
-    return {
-        "city": data.get("name", city),
-        "country": sys_data.get("country", ""),
-        "temperature": main.get("temp"),
-        "description": weather.get("description", "No description available"),
-        "humidity": main.get("humidity"),
-        "icon": weather.get("icon", "01d"),
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Call, ast.Attribute, ast.Name, ast.Subscript, ast.List, ast.Tuple, ast.Dict, ast.Set)):
+            raise ValueError("Expression contains unsupported syntax")
+
+    compiled = compile(tree, filename="<calculator>", mode="eval")
+    result = eval(compiled, {"__builtins__": {}}, {})
+
+    if isinstance(result, (int, float)):
+        return float(result)
+    raise ValueError("Expression did not evaluate to a number")
+
+
+def _apply_operation(left: float, right: float, operator: str) -> float:
+    op = operator.strip().lower()
+    operations = {
+        "+": lambda a, b: a + b,
+        "add": lambda a, b: a + b,
+        "plus": lambda a, b: a + b,
+        "-": lambda a, b: a - b,
+        "subtract": lambda a, b: a - b,
+        "minus": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+        "x": lambda a, b: a * b,
+        "multiply": lambda a, b: a * b,
+        "/": lambda a, b: a / b,
+        "divide": lambda a, b: a / b,
+        "÷": lambda a, b: a / b,
+        "%": lambda a, b: a % b,
+        "mod": lambda a, b: a % b,
+        "modulo": lambda a, b: a % b,
+        "**": lambda a, b: a ** b,
+        "^": lambda a, b: a ** b,
+        "power": lambda a, b: a ** b,
     }
 
+    if op not in operations:
+        raise ValueError(f"Unsupported operator: {operator}")
 
-@app.route("/", methods=["GET", "POST"])
+    if op in {"/", "divide", "÷"} and right == 0:
+        raise ZeroDivisionError("Division by zero is not allowed")
+
+    return float(operations[op](left, right))
+
+
+@app.route("/")
 def index():
-    weather = None
-    error = None
+    return send_from_directory(app.static_folder, "index.html")
 
+
+@app.route("/api/calc", methods=["GET", "POST"])
+def calc():
     if request.method == "POST":
-        city = request.form.get("city", "").strip()
-        if city:
-            try:
-                weather = get_weather(city)
-                weather["icon_url"] = f"https://openweathermap.org/img/wn/{weather['icon']}@2x.png"
-            except (RuntimeError, ValueError) as exc:
-                error = str(exc)
-        else:
-            error = "Please enter a city name."
+        payload = request.get_json(silent=True) or {}
+    else:
+        payload = request.args.to_dict()
 
-    return render_template("index.html", weather=weather, error=error)
+    expression = payload.get("expression")
+    a = payload.get("a")
+    b = payload.get("b")
+    op = payload.get("op") or payload.get("operator")
+
+    try:
+        if expression is not None:
+            result = _evaluate_expression(str(expression))
+            return jsonify({"success": True, "result": result, "expression": str(expression)})
+
+        if a is None or b is None or op is None:
+            raise ValueError("Provide either expression or a, b, and op")
+
+        left = _safe_numeric(a)
+        right = _safe_numeric(b)
+        result = _apply_operation(left, right, str(op))
+        return jsonify({"success": True, "result": result, "a": left, "b": right, "op": str(op)})
+    except ZeroDivisionError as exc:
+        return jsonify({"success": False, "detail": str(exc)}), 400
+    except ValueError as exc:
+        return jsonify({"success": False, "detail": str(exc)}), 400
 
 
 if __name__ == "__main__":
