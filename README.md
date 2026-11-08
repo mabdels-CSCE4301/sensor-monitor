@@ -9,4 +9,7 @@ Date:
 
 Milestones:
  1) Git 
+ 2) VSCode
+ 3) SpecKit 
+ 4) Claude
 
