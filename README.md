@@ -10,5 +10,5 @@ Date:
 Milestones:
  1) Git 
  2) VSCode
- 3) SpecKit 
- 4) Claude
+ 3) Use Calude to build application 
+ 4) Use Speckit to build a new feature 
