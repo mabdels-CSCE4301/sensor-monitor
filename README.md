@@ -8,7 +8,7 @@ Date:
 5 November 2026
 
 Milestones:
- 1) Git 
- 2) VSCode
- 3) Use Calude to build application 
+ 1) Git - Done 
+ 2) VSCode - Done
+ 3) Use Claude to build application 
  4) Use Speckit to build a new feature 
