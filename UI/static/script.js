@@ -5,7 +5,10 @@ const calculator = document.getElementById('calculator');
 const status = document.getElementById('calc-status');
 const skinSelect = document.getElementById('skin-select');
 
-const SKINS = ['default', 'modern', 'classic'];
+// The <option> list in index.html is the single registry of available skins.
+const SKINS = skinSelect
+  ? Array.from(skinSelect.options).map((option) => option.value)
+  : ['default'];
 const SKIN_STORAGE_KEY = 'calculator-skin';
 
 const state = {
@@ -17,10 +20,26 @@ const state = {
   isLoading: false,
 };
 
+// The error auto-clear is scheduled here so fresh input can cancel it.
+let errorResetTimer = null;
+
+function cancelErrorReset() {
+  if (errorResetTimer !== null) {
+    clearTimeout(errorResetTimer);
+    errorResetTimer = null;
+  }
+}
+
 function updateDisplay() {
   display.textContent = state.currentInput;
   expression.textContent = state.expression || '0';
   display.classList.toggle('is-error', state.isError);
+}
+
+function setKeysDisabled(disabled) {
+  buttons.forEach((button) => {
+    button.disabled = disabled;
+  });
 }
 
 function announce(message) {
@@ -30,6 +49,7 @@ function announce(message) {
 }
 
 function inputDigit(value) {
+  cancelErrorReset();
   if (state.isError) return;
 
   if (state.resultShown) {
@@ -43,15 +63,23 @@ function inputDigit(value) {
 
   if (state.waitingForNewValue) {
     state.currentInput = value;
+    state.expression += value;
     state.waitingForNewValue = false;
+  } else if (state.currentInput === '0') {
+    // Replace the leading zero in both strings so "05" never reaches the API.
+    state.currentInput = value;
+    state.expression = state.expression
+      ? state.expression.slice(0, -1) + value
+      : value;
   } else {
-    state.currentInput = state.currentInput === '0' ? value : state.currentInput + value;
+    state.currentInput += value;
+    state.expression = state.expression ? state.expression + value : value;
   }
-  state.expression = state.expression ? state.expression + value : value;
   updateDisplay();
 }
 
 function inputDecimal() {
+  cancelErrorReset();
   if (state.isError) return;
 
   if (state.resultShown) {
@@ -65,12 +93,13 @@ function inputDecimal() {
     state.expression = (state.expression || '') + '0.';
   } else if (!state.currentInput.includes('.')) {
     state.currentInput += '.';
-    state.expression = (state.expression || '') + '.';
+    state.expression = state.expression ? state.expression + '.' : '0.';
   }
   updateDisplay();
 }
 
 function inputOperator(operator) {
+  cancelErrorReset();
   if (state.isError) return;
 
   state.resultShown = false;
@@ -85,6 +114,7 @@ function inputOperator(operator) {
 }
 
 function clearAll() {
+  cancelErrorReset();
   state.currentInput = '0';
   state.expression = '';
   state.waitingForNewValue = false;
@@ -94,17 +124,30 @@ function clearAll() {
 }
 
 function deleteLast() {
+  cancelErrorReset();
   if (state.isError) return;
 
   state.resultShown = false;
-  if (state.expression.length > 0) {
-    state.expression = state.expression.slice(0, -1);
-    state.currentInput = state.expression || '0';
-    if (!state.expression) {
-      state.currentInput = '0';
-    }
-    updateDisplay();
+  if (!state.expression) {
+    return;
   }
+
+  state.expression = state.expression.slice(0, -1);
+
+  if (!state.expression) {
+    state.currentInput = '0';
+    state.waitingForNewValue = false;
+  } else if (/[+\-*/%]$/.test(state.expression)) {
+    // Trailing operator: show it and let the next digit start a new operand.
+    const operator = state.expression.slice(-1);
+    state.currentInput = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
+    state.waitingForNewValue = true;
+  } else {
+    // Otherwise the display mirrors the operand after the last operator.
+    state.currentInput = state.expression.match(/[^+\-*/%]*$/)[0] || '0';
+    state.waitingForNewValue = false;
+  }
+  updateDisplay();
 }
 
 async function evaluateExpression() {
@@ -113,7 +156,11 @@ async function evaluateExpression() {
   const rawExpression = state.expression.replace(/×/g, '*').replace(/÷/g, '/');
   if (!rawExpression) return;
 
+  cancelErrorReset();
   state.isLoading = true;
+  // Disable the keypad while the request is in flight so no click can mutate
+  // state that the response would then overwrite.
+  setKeysDisabled(true);
   calculator.setAttribute('aria-busy', 'true');
   calculator.dataset.loading = 'true';
 
@@ -140,11 +187,14 @@ async function evaluateExpression() {
     state.isError = true;
     updateDisplay();
     announce(`Error: ${error.message || 'Calculation failed'}`);
-    setTimeout(() => {
+    cancelErrorReset();
+    errorResetTimer = setTimeout(() => {
+      errorResetTimer = null;
       clearAll();
     }, 800);
   } finally {
     state.isLoading = false;
+    setKeysDisabled(false);
     calculator.setAttribute('aria-busy', 'false');
     calculator.dataset.loading = 'false';
   }

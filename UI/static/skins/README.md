@@ -33,8 +33,10 @@ view can be bookmarked or shared.
    etc.) plus any component rules the theme needs.
 3. Add `<link rel="stylesheet" href="/static/skins/<name>.css" />` to
    `static/index.html` and an `<option value="<name>">` to the switcher.
-4. Register the name in `SKINS` in `static/script.js` and in the pre-paint
-   script in `index.html` so `?skin=` and stored preferences accept it.
+4. Nothing else: the `<option>` list is the registry. `script.js` derives
+   `SKINS` from it, and the pre-paint script accepts any slug-shaped `?skin=`
+   or stored value, so `?skin=<name>` and the saved preference work as soon as
+   the option exists.
 
 ## Requirements for new skins
 

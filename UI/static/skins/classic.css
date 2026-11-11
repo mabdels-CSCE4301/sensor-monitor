@@ -45,13 +45,25 @@ html[data-skin="classic"] .skin-picker {
 }
 
 html[data-skin="classic"] .skin-picker select {
-  padding: 0.38rem 0.7rem;
+  padding: 0.38rem 1.75rem 0.38rem 0.7rem;
   border: 1px solid #7c786c;
   border-radius: 5px;
   background-color: #d5d1c3;
-  background-image: linear-gradient(180deg, #e8e4d6, #c9c5b7);
-  background-position: 0 0;
-  background-size: 100% 100%;
+  /* Caret (two half-squares) layered over the plastic bevel; the base theme
+     relies on these background-image layers because appearance: none hides
+     the native arrow. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, #26261f 50%),
+    linear-gradient(135deg, #26261f 50%, transparent 50%),
+    linear-gradient(180deg, #e8e4d6, #c9c5b7);
+  background-position:
+    calc(100% - 14px) 55%,
+    calc(100% - 9px) 55%,
+    0 0;
+  background-size:
+    5px 5px,
+    5px 5px,
+    100% 100%;
   background-repeat: no-repeat;
   color: #26261f;
   font: inherit;

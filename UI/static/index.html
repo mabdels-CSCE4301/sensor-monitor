@@ -12,23 +12,24 @@
       /*
        * Apply the saved skin before first paint so theming never flashes.
        * Order of precedence: ?skin= param > localStorage > default.
+       * The <option> list below is the registry of known skins; this script
+       * only rejects values that are not slug-shaped, and script.js normalizes
+       * anything that is not a registered skin.
        */
       (function () {
-        var skins = ["default", "modern", "classic"];
+        function slug(value) {
+          return typeof value === "string" && /^[a-z0-9-]+$/.test(value) ? value : null;
+        }
         var skin = "default";
         try {
-          var requested = new URLSearchParams(window.location.search).get("skin");
+          var requested = slug(new URLSearchParams(window.location.search).get("skin"));
           var stored = null;
           try {
-            stored = window.localStorage.getItem("calculator-skin");
+            stored = slug(window.localStorage.getItem("calculator-skin"));
           } catch (storageError) {
             stored = null;
           }
-          if (skins.indexOf(requested) !== -1) {
-            skin = requested;
-          } else if (skins.indexOf(stored) !== -1) {
-            skin = stored;
-          }
+          skin = requested || stored || "default";
         } catch (urlError) {
           skin = "default";
         }

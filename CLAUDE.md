@@ -51,7 +51,7 @@ Flask success returns `{"success": true, "result": ...}`; Flask errors return HT
 
 `_evaluate_expression` normalizes unicode operators (`×`, `÷`, `^`), enforces a character whitelist (`[0-9 + - * / ( ) . % whitespace]`), parses with `ast`, rejects `Call`/`Attribute`/`Name`/subscript/collection nodes, then evaluates with `__builtins__` disabled. Preserve this pattern when extending expressions — never replace it with a plain `eval`.
 
-Note that `%` is Python modulo, not percent: `50%` is a syntax error. The UI's `%` key only succeeds when it forms a complete modulo expression (e.g. `10%3`); use the `a`/`b`/`op` mode for `op=%`. In that mode division by zero is rejected before the operation; in expression mode Python raises `ZeroDivisionError`, which both servers convert to HTTP 400.
+Note that `%` is Python modulo, not percent: the UI's `%` key only succeeds when it forms a complete modulo expression (e.g. `10%3`); `50%` is a syntax error in expression mode. The HTTP API's separate `a`/`b`/`op` form supports `op=%` directly — the UI itself has no a/b/op mode. Division by zero is rejected before the operation in the `a`/`b`/`op` form; in expression mode Python raises `ZeroDivisionError`, which both servers convert to HTTP 400.
 
 ### Frontend and skins
 
@@ -69,7 +69,7 @@ Themes:
 - `UI/static/skins/modern.css` — futuristic 2030 skin.
 - Contract and extension guide: `UI/static/skins/README.md`.
 
-Adding a skin touches four places: the `<link>` and `<option>` in `index.html`, the pre-paint `skins` array in `index.html`, and `SKINS` in `script.js`. Skin CSS must be scoped under `html[data-skin="<name>"]`; it is always loaded alongside the base stylesheet.
+Adding a skin touches three places: the `<link>` and `<option>` in `index.html`, and the skin's CSS file. The `<option>` list is the registry — `script.js` derives `SKINS` from it, and the pre-paint script accepts any slug-shaped `?skin=`/stored value, so no separate name list needs updating. Skin CSS must be scoped under `html[data-skin="<name>"]`; it is always loaded alongside the base stylesheet.
 
 ## Tests
 
