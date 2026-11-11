@@ -10,5 +10,5 @@ Mohamed AbdElSalam
 Milestones:
  1) Git - Done 
  2) VSCode - Done
- 3) Use Claude to build application 
+ 3) Use Claude to build application - Done 
  4) Use Speckit to build a new feature 

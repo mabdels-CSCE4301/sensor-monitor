@@ -15,6 +15,11 @@ Despite the directory name, there is no sensor-monitoring code.
   - `calculator.py` — FastAPI port with the same arithmetic helpers duplicated.
   - `sample.py` — thin alias that runs the Flask app.
   - `static/` — calculator frontend (`index.html`, `script.js`, `style.css`).
+    - `static/skins/` — alternate CSS themes scoped by `html[data-skin="..."]`.
+      `classic.css` is the 1990s pocket-calculator skin and `modern.css` the
+      futuristic 2030 skin; select either with the on-page switcher or
+      `/?skin=classic` / `/?skin=modern`. The base `style.css` is the `default`
+      theme. See `static/skins/README.md`.
   - `tests/` — pytest setup; `conftest.py` puts `UI/` on `sys.path`. No test files currently exist.
   - `requirements.txt` — unpinned deps: fastapi, uvicorn, flask, requests, pytest.
 - `src/`, `tests/`, `docs/` at the repo root are empty placeholders.

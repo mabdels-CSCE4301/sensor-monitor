@@ -3,42 +3,92 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Modern Calculator</title>
+    <title>Calculator</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23c3bfb1'/%3E%3Crect x='6' y='5' width='20' height='8' rx='2' fill='%23aeb794'/%3E%3Cg fill='%23363632'%3E%3Crect x='6' y='17' width='5' height='4' rx='1'/%3E%3Crect x='13' y='17' width='5' height='4' rx='1'/%3E%3Crect x='20' y='17' width='5' height='4' rx='1'/%3E%3Crect x='6' y='23' width='5' height='4' rx='1'/%3E%3Crect x='13' y='23' width='5' height='4' rx='1'/%3E%3Crect x='20' y='23' width='5' height='4' rx='1' fill='%23b0581a'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <script>
+      /*
+       * Apply the saved skin before first paint so theming never flashes.
+       * Order of precedence: ?skin= param > localStorage > default.
+       */
+      (function () {
+        var skins = ["default", "modern", "classic"];
+        var skin = "default";
+        try {
+          var requested = new URLSearchParams(window.location.search).get("skin");
+          var stored = null;
+          try {
+            stored = window.localStorage.getItem("calculator-skin");
+          } catch (storageError) {
+            stored = null;
+          }
+          if (skins.indexOf(requested) !== -1) {
+            skin = requested;
+          } else if (skins.indexOf(stored) !== -1) {
+            skin = stored;
+          }
+        } catch (urlError) {
+          skin = "default";
+        }
+        document.documentElement.setAttribute("data-skin", skin);
+      })();
+    </script>
     <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/skins/modern.css" />
+    <link rel="stylesheet" href="/static/skins/classic.css" />
   </head>
   <body>
     <main class="app-shell">
-      <section class="calculator" aria-label="Calculator app">
+      <div class="skin-picker">
+        <label for="skin-select">Skin</label>
+        <select id="skin-select" name="skin">
+          <option value="default">Default</option>
+          <option value="classic">Classic</option>
+          <option value="modern">Modern</option>
+        </select>
+      </div>
+
+      <section
+        class="calculator"
+        id="calculator"
+        aria-label="Calculator app"
+        aria-busy="false"
+        data-loading="false"
+      >
         <div class="screen-wrap">
           <div id="expression" class="expression">0</div>
           <div id="display" class="display">0</div>
         </div>
 
         <div class="keys">
-          <button class="action" data-value="C">C</button>
-          <button class="action" data-value="DEL">DEL</button>
-          <button class="action" data-value="%">%</button>
-          <button class="operator" data-value="/">÷</button>
+          <button class="action" data-value="C" aria-label="Clear">C</button>
+          <button class="action" data-value="DEL" aria-label="Delete last digit">DEL</button>
+          <button class="action" data-value="%" aria-label="Percent">%</button>
+          <button class="operator" data-value="/" aria-label="Divide">÷</button>
 
           <button data-value="7">7</button>
           <button data-value="8">8</button>
           <button data-value="9">9</button>
-          <button class="operator" data-value="*">×</button>
+          <button class="operator" data-value="*" aria-label="Multiply">×</button>
 
           <button data-value="4">4</button>
           <button data-value="5">5</button>
           <button data-value="6">6</button>
-          <button class="operator" data-value="-">−</button>
+          <button class="operator" data-value="-" aria-label="Subtract">−</button>
 
           <button data-value="1">1</button>
           <button data-value="2">2</button>
           <button data-value="3">3</button>
-          <button class="operator" data-value="+">+</button>
+          <button class="operator" data-value="+" aria-label="Add">+</button>
 
           <button class="wide" data-value="0">0</button>
-          <button data-value=".">.</button>
-          <button class="equals" data-value="=">=</button>
+          <button data-value="." aria-label="Decimal point">.</button>
+          <button class="equals" data-value="=" aria-label="Equals">=</button>
         </div>
+
+        <p id="calc-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
       </section>
     </main>
 
