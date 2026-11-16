@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Climate Trends</title>
+    <meta
+      name="description"
+      content="Explore 76 years of temperature and rainfall records, fitted trends, and statistical significance."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Cpath d='M6 22l6-7 5 4 9-11' fill='none' stroke='%233987e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='8' r='2.5' fill='%23d95926'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/climate.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="page">
+      <header class="topbar">
+        <a class="brand" href="/climate">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" focusable="false">
+              <path d="M5 23l7-8 5 4 10-12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="27" cy="7" r="2.4" fill="currentColor" />
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>Climate Trends</strong>
+            <small>Environmental record explorer</small>
+          </span>
+        </a>
+
+        <nav class="nav" aria-label="Tools">
+          <a href="/">Calculator</a>
+          <a href="/climate" aria-current="page">Climate trends</a>
+        </nav>
+      </header>
+
+      <main id="main">
+        <section class="hero" aria-labelledby="page-title">
+          <p class="eyebrow">ERA5 reanalysis · 1950–2025</p>
+          <h1 id="page-title">Is your region’s climate changing?</h1>
+          <p class="lede">
+            Choose an environmental measure and a region. We retrieve 76 years of
+            annual records, fit a straight-line trend, and test whether the change
+            stands out from normal year-to-year variation.
+          </p>
+        </section>
+
+        <form id="controls" class="filters" aria-label="Climate data selection">
+          <div class="field">
+            <label for="measure-select">Measure</label>
+            <select id="measure-select" name="measure"></select>
+          </div>
+          <div class="field">
+            <label for="region-select">Region</label>
+            <select id="region-select" name="region"></select>
+          </div>
+          <button id="analyze-button" class="primary-button" type="submit">
+            <span class="button-spinner" aria-hidden="true"></span>
+            <span id="button-label">Analyze trend</span>
+          </button>
+          <p id="location-note" class="location-note"></p>
+        </form>
+
+        <div id="error-banner" class="error-banner" role="alert" hidden>
+          <span class="error-icon" aria-hidden="true">!</span>
+          <p id="error-text"></p>
+        </div>
+
+        <div id="loading-state" class="loading-state" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>Retrieving 76 years of records…</p>
+        </div>
+
+        <section id="results" class="results" aria-busy="false" hidden>
+          <article class="chart-card" aria-labelledby="chart-title">
+            <header class="card-head">
+              <div>
+                <p id="chart-eyebrow" class="eyebrow"></p>
+                <h2 id="chart-title"></h2>
+                <p id="chart-subtitle" class="card-subtitle"></p>
+              </div>
+              <p id="chart-annotation" class="trend-note"></p>
+            </header>
+
+            <div id="chart-frame" class="chart-frame">
+              <svg
+                id="chart"
+                viewBox="0 0 960 460"
+                role="img"
+                tabindex="0"
+                aria-labelledby="chart-title chart-subtitle"
+                aria-describedby="chart-help"
+              ></svg>
+              <p id="chart-help" class="visually-hidden">
+                Use the left and right arrow keys to inspect each year. The full
+                annual data table follows the chart.
+              </p>
+              <p id="chart-live" class="visually-hidden" role="status" aria-live="polite"></p>
+              <div id="tooltip" class="chart-tooltip" aria-hidden="true" hidden></div>
+            </div>
+
+            <ul class="legend" aria-label="Chart legend">
+              <li><span class="legend-key legend-key--data" aria-hidden="true"></span>Annual value</li>
+              <li><span class="legend-key legend-key--trend" aria-hidden="true"></span>Fitted trend</li>
+            </ul>
+
+            <div class="chart-footer">
+              <p id="chart-source"></p>
+              <a id="download-csv" class="text-link" href="#" download>Download CSV</a>
+            </div>
+
+            <details class="data-details">
+              <summary>View annual data table</summary>
+              <div class="table-scroll">
+                <table id="data-table">
+                  <caption class="visually-hidden">
+                    Annual values, fitted trend, and departure from the fitted trend.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Year</th>
+                      <th scope="col">Annual value</th>
+                      <th scope="col">Fitted trend</th>
+                      <th scope="col">Departure</th>
+                    </tr>
+                  </thead>
+                  <tbody id="data-table-body"></tbody>
+                </table>
+              </div>
+            </details>
+          </article>
+
+          <aside class="insight-card" aria-labelledby="insight-heading">
+            <p id="insight-heading" class="eyebrow">Trend result</p>
+
+            <div class="rate-block">
+              <div class="rate-line">
+                <span id="rate-value" class="rate-value"></span>
+                <span id="rate-unit" class="rate-unit"></span>
+              </div>
+              <p class="rate-label">fitted change per decade</p>
+            </div>
+
+            <p id="verdict" class="verdict">
+              <span id="verdict-icon" class="verdict-icon" aria-hidden="true"></span>
+              <span id="verdict-text"></span>
+            </p>
+
+            <dl class="stat-list">
+              <div>
+                <dt>p-value</dt>
+                <dd id="stat-p"></dd>
+              </div>
+              <div>
+                <dt>95% confidence interval</dt>
+                <dd id="stat-ci"></dd>
+              </div>
+              <div>
+                <dt>R²</dt>
+                <dd id="stat-r2"></dd>
+              </div>
+              <div>
+                <dt>Typical scatter around trend</dt>
+                <dd id="stat-scatter"></dd>
+              </div>
+              <div>
+                <dt>Record</dt>
+                <dd id="stat-record"></dd>
+              </div>
+            </dl>
+
+            <p id="summary-text" class="summary-text"></p>
+          </aside>
+        </section>
+
+        <section class="explainer" aria-labelledby="test-heading">
+          <div class="explainer-grid">
+            <div>
+              <p class="eyebrow">Reading the result</p>
+              <h2 id="test-heading">How the significance test works</h2>
+              <p id="test-explanation" class="explainer-lede"></p>
+            </div>
+
+            <ol class="steps">
+              <li>
+                <span class="step-number" aria-hidden="true">1</span>
+                <div>
+                  <h3>Fit a line</h3>
+                  <p>
+                    Least squares finds the straight line that sits closest to all
+                    of the annual values.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number" aria-hidden="true">2</span>
+                <div>
+                  <h3>Measure the wobble</h3>
+                  <p>
+                    The gaps between each year and the line estimate normal
+                    year-to-year variation. We adjust for correlation between
+                    neighbouring years using Newey–West standard errors.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number" aria-hidden="true">3</span>
+                <div>
+                  <h3>Compare slope with noise</h3>
+                  <p>
+                    The t statistic divides the slope by its standard error. A
+                    large absolute value means the trend is large compared with
+                    the year-to-year scatter.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span class="step-number" aria-hidden="true">4</span>
+                <div>
+                  <h3>Convert to a p-value</h3>
+                  <p>
+                    The p-value is the chance of seeing a slope at least this steep
+                    if the true trend were zero. A value below 0.05 is the
+                    conventional threshold for statistical significance.
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="method-note">
+            <h3>What “statistically significant” means — and does not mean</h3>
+            <p>
+              A p-value is not the probability that the trend is real, and it says
+              nothing about how large or important the change is. It only measures
+              how compatible this record is with a null model of no trend. A
+              significant result means the signal is hard to explain by the
+              observed year-to-year noise; a non-significant result means this
+              record cannot separate the trend from that noise.
+            </p>
+            <p>
+              R² is the share of year-to-year variation explained by the straight
+              line, the typical scatter is the standard deviation of annual values
+              around it, and the 95% confidence interval is the range of slopes
+              compatible with the record at the conventional 95% level.
+            </p>
+            <p id="caveat-text"></p>
+          </div>
+        </section>
+
+        <p id="result-status" class="visually-hidden" role="status" aria-live="polite"></p>
+      </main>
+
+      <footer class="page-footer">
+        <p>
+          Data: ERA5 reanalysis via the
+          <a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">Open-Meteo Archive API</a>.
+          One grid cell per region. Annual temperature is a mean of daily means;
+          annual rainfall is a sum of daily precipitation.
+        </p>
+      </footer>
+    </div>
+
+    <script src="/static/climate.js"></script>
+  </body>
+</html>

@@ -10,6 +10,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from climate import ClimateError, build_trend, get_options
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
@@ -84,6 +86,24 @@ def _apply_operation(left: float, right: float, operator: str) -> float:
 @app.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/climate")
+async def climate_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "climate.html")
+
+
+@app.get("/api/climate/options")
+async def climate_options() -> JSONResponse:
+    return JSONResponse(get_options())
+
+
+@app.get("/api/climate/trend")
+async def climate_trend(region: str = "", measure: str = "") -> JSONResponse:
+    try:
+        return JSONResponse(build_trend(region.strip(), measure.strip()))
+    except ClimateError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

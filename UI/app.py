@@ -4,7 +4,14 @@ from typing import Any
 
 from flask import Flask, jsonify, request, send_from_directory
 
+from climate import ClimateError, build_trend, get_options
+
 app = Flask(__name__, static_folder="static")
+
+
+@app.errorhandler(ClimateError)
+def handle_climate_error(error: ClimateError):
+    return jsonify({"success": False, "detail": str(error)}), error.status_code
 
 
 def _safe_numeric(value: Any) -> float:
@@ -75,6 +82,23 @@ def _apply_operation(left: float, right: float, operator: str) -> float:
 @app.route("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
+
+
+@app.route("/climate")
+def climate_page():
+    return send_from_directory(app.static_folder, "climate.html")
+
+
+@app.route("/api/climate/options")
+def climate_options():
+    return jsonify(get_options())
+
+
+@app.route("/api/climate/trend")
+def climate_trend():
+    region = str(request.args.get("region", "")).strip()
+    measure = str(request.args.get("measure", "")).strip()
+    return jsonify(build_trend(region, measure))
 
 
 @app.route("/api/calc", methods=["GET", "POST"])
