@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Course project for "AI-Assisted Software Development with VS Code, Git, Claude & GitHub Spec Kit". The application is a **calculator** (`/`) plus a **Climate Trends explorer** (`/climate`): a Flask server (`UI/app.py`, primary) or a FastAPI port (`UI/calculator.py`) exposing arithmetic and climate APIs, plus dependency-free HTML/CSS/JS frontends. `README.md` is course metadata (date, author, milestones), not app documentation. The repository's Git history, branches, and stash are themselves coursework artifacts — treat them as read-only (see Git).
+Course project for "AI-Assisted Software Development with VS Code, Git, Claude & GitHub Spec Kit". The application is a **scientific calculator** (`/`) plus a **Climate Trends explorer** (`/climate`): a Flask server (`UI/app.py`, primary) or a FastAPI port (`UI/calculator.py`) exposing arithmetic and climate APIs, plus dependency-free HTML/CSS/JS frontends. `README.md` is course metadata (date, author, milestones), not app documentation. The repository's Git history, branches, and stash are themselves coursework artifacts — treat them as read-only (see Git).
 
 Despite the directory name, there is no sensor-monitoring code. The climate feature analyses ERA5 reanalysis, not live sensors.
 
@@ -35,6 +35,7 @@ Smoke-test the APIs without a browser (use port 8000 with the FastAPI server):
 ```bash
 curl -s 'http://localhost:5000/api/calc?expression=2+3*4'
 curl -s 'http://localhost:5000/api/calc?a=7&b=8&op=multiply'
+curl -s 'http://localhost:5000/api/calc?expression=sin(30)&angle_mode=DEG'
 curl -s 'http://localhost:5000/api/climate/options'
 curl -s 'http://localhost:5000/api/climate/trend?region=london&measure=temperature'
 ```
@@ -45,27 +46,41 @@ curl -s 'http://localhost:5000/api/climate/trend?region=london&measure=temperatu
 
 `/api/calc` (GET or POST; query params or JSON body) accepts either:
 
-- `expression` — an arithmetic string such as `"2+3*4"`, or
-- `a`, `b`, `op` — two numbers and an operator.
+- `expression` — an expression such as `"2+3*4"` or `"sqrt(16)+sin(30)"`, or
+- `a`, `b`, `op` — two numbers and an operator,
 
-Flask success returns `{"success": true, "result": ...}`; Flask errors return HTTP 400 with `{"success": false, "detail": "..."}`. FastAPI success shapes match, but its 400s use FastAPI's `{"detail": "..."}` body via `HTTPException` (no `success` field). The frontend keys off the HTTP status and `detail`, so both work. New endpoints generally need adding to both servers.
+plus an optional `angle_mode` (`DEG` or `RAD`; default `DEG`).
 
-`op` accepts symbols and aliases: `+ add plus`, `- subtract minus`, `* x multiply`, `/ divide ÷`, `% mod modulo`, `** ^ power`.
+Success bodies include `result` (numeric, unchanged for compatibility), `display` (the formatted string the UI renders), `angle_mode`, and `is_trigonometric` (true when any angle-aware operation ran). Flask errors return HTTP 400 with `{"success": false, "detail": "..."}`; FastAPI 400s use `{"detail": "..."}` via `HTTPException` (no `success` field). The frontend keys off the HTTP status and `detail`, so both work. New endpoints generally need adding to both servers.
 
-`app.py` and `calculator.py` intentionally duplicate `_safe_numeric`, `_evaluate_expression`, and `_apply_operation` **byte-for-byte**. Any arithmetic or operator change must be made in **both** files or the servers diverge.
+`op` accepts symbols and aliases: `+ add plus`, `- subtract minus`, `* x multiply`, `/ divide ÷`, `% mod modulo`, `** ^ pow xʸ power`. Scientific names are `sqrt`, `square`, `exp`, `ln`, `log`, `abs`, and `sin cos tan asin acos atan`.
+
+### Calculation engine
+
+`UI/calc_engine.py` is the single owner of arithmetic, scientific operations, angle handling, result formatting, and calculation errors. Both servers are thin adapters: they parse input, call `calc_engine.evaluate(...)` or `calc_engine.apply_operation(...)`, and render the same success/error shapes.
+
+- Operations live in an `OPERATIONS` registry (`Operation(name, symbol, aliases, arity, impl, angle_aware, domain)`); `get_operation()` resolves names, symbols, and aliases case-insensitively. Add a function by registering one entry plus tests — no route and no frontend branch.
+- `evaluate(expression, angle_mode)` returns `EvaluationResult(value, display, angle_mode, is_trigonometric)`.
+- `format_result()` uses 12 significant digits, strips trailing zeros, collapses magnitudes below `ZERO_DISPLAY_THRESHOLD` to `0`, never emits `-0`, and raises `OverflowCalcError` for non-finite values.
+- The exception hierarchy is `CalcError` → `InvalidExpressionError`, `DomainError`, `OverflowCalcError`; each carries a user-facing `detail` and maps to HTTP 400.
+- Angle conversion happens only at `_to_radians` / `_from_radians`; trig internals always use radians. `DEFAULT_ANGLE_MODE` is `DEG`.
+
+Do not add calculator math to `app.py` or `calculator.py`; the previous byte-for-byte helper duplication was retired in favour of the engine.
 
 ### Expression safety
 
-`_evaluate_expression` normalizes unicode operators (`×`, `÷`, `^`), enforces a character whitelist (`[0-9 + - * / ( ) . % whitespace]`), parses with `ast`, rejects `Call`/`Attribute`/`Name`/subscript/collection nodes, then evaluates with `__builtins__` disabled. Preserve this pattern when extending expressions — never replace it with a plain `eval`.
+The engine normalizes unicode operators (`×`, `÷`, `−`, `π`, `^`), enforces `MAX_EXPRESSION_LENGTH`, applies a character whitelist that admits letters only because registered function names and the constants `pi`/`e` need them, enforces `MAX_NESTING_DEPTH` (parenthesis depth), parses with `ast`, rejects unsupported nodes, admits `ast.Call` only for registered names with the declared arity, allows `ast.Name` only for `pi`/`e`, and evaluates with `__builtins__` disabled. Extend the whitelist and the AST allowlist together — never replace this with a plain `eval`.
 
-Note that `%` is Python modulo, not percent: the UI's `%` key only succeeds when it forms a complete modulo expression (e.g. `10%3`); `50%` is a syntax error in expression mode. The HTTP API's separate `a`/`b`/`op` form supports `op=%` directly — the UI itself has no a/b/op mode. Division by zero is rejected before the operation in the `a`/`b`/`op` form; in expression mode Python raises `ZeroDivisionError`, which both servers convert to HTTP 400.
+Note that `%` is Python modulo, not percent: the UI's `%` key only succeeds when it forms a complete modulo expression (e.g. `10%3`); `50%` is a syntax error in expression mode. The HTTP API's separate `a`/`b`/`op` form supports `op=%` directly — the UI itself has no a/b/op mode. Division and modulo by zero raise `DomainError` and return HTTP 400 in both request shapes. Implicit multiplication (`2pi`, `2 sin(30)`) is rejected; the UI inserts an explicit `*` when a user action would otherwise create adjacent operands.
 
 ### Frontend and skins
 
 `UI/static/script.js` is a single vanilla script with four concerns:
 
-- **Calculator state machine** (`currentInput`, `expression`, `waitingForNewValue`, `resultShown`). `=` fetches `/api/calc`; failures render `Error` / `invalid`, then auto-clear after 800 ms.
-- **Keyboard input** (digits, operators, `Enter`, `Escape`, `Backspace`) plus key-focus semantics: pointer clicks blur the key so a later physical `Enter` maps to `=`, while keyboard activation keeps focus for native behavior.
+- **Calculator state machine** (`currentInput`, `expression`, `waitingForNewValue`, `resultShown`, `pendingMultiply`, `angleMode`, `history`). `=` fetches `/api/calc?expression=...&angle_mode=...`; the result area renders the response `display`, while the expression stays visible. On failure the expression remains editable and the server `detail` is shown persistently — the old 800 ms auto-clear and `invalid` substitution were removed (the required FR-019 behavior change).
+- **Angle mode and history**: DEG/RAD buttons update `#angle-mode-indicator` and are sent with every request. Successful evaluations append `expression = display` (plus the mode when `is_trigonometric` is true) to a session-only list capped at 50, newest first; entries are rendered with `textContent`, and `#clear-history` empties the list.
+- **Scientific input**: function keys insert `name(` and auto-close open parentheses before an operator or `=`; `π`/`e` insert the constant with an explicit `*` when it follows an operand; `x²` appends `^2`; `±` toggles the trailing operand's sign. The keypad is grouped into numbers, arithmetic, scientific functions, and evaluation controls.
+- **Keyboard input** (digits, operators, parentheses, `Enter`, `Escape`, `Backspace`) plus key-focus semantics: pointer clicks blur the key so a later physical `Enter` maps to `=`, while keyboard activation keeps focus for native behavior.
 - **Runtime states**: `aria-busy` + `data-loading` during fetches, `.is-error` on the display, and a visually hidden live region for result/error announcements.
 - **Skin controller** with precedence `?skin=` query param > `localStorage["calculator-skin"]` > `default`.
 
@@ -99,7 +114,7 @@ The trend is ordinary least squares on year → annual value. The reported p-val
 
 ## Tests
 
-`UI/tests/conftest.py` puts `UI/` on `sys.path`, so tests import the Flask server as `app` and the domain layer as `climate`. The 13 current tests cover static skin wiring and CSS scoping, plus the climate domain (t distribution, aggregation, trend detection) and the Flask climate routes. There are no `/api/calc` tests and no FastAPI tests — add API tests through Flask's `app.test_client()` (and `fastapi.testclient` if covering the port). Climate tests monkeypatch `climate.load_region_series`, so they never touch the network.
+`UI/tests/conftest.py` puts `UI/` on `sys.path`, so tests import the Flask server as `app`, the FastAPI app as `calculator`, and the domain layers as `calc_engine` and `climate`. The 139 tests cover the engine (formatter, alias resolution, evaluator safety, error taxonomy, scientific functions, both angle modes), `/api/calc` integration on both servers (`fastapi.testclient.TestClient`, which needs the `httpx` test dependency), static skin/angle-mode/history wiring and CSS scoping, plus the climate domain (t distribution, aggregation, trend detection) and the Flask climate routes. Climate tests monkeypatch `climate.load_region_series`, so they never touch the network.
 
 ## Claude tooling
 

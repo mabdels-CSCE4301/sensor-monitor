@@ -3,3 +3,4 @@ uvicorn
 flask
 requests
 pytest
+httpx  # required by fastapi.testclient.TestClient

@@ -348,3 +348,29 @@ html[data-skin="classic"] .equals {
     opacity: 0.8;
   }
 }
+
+/* Scientific calculator controls */
+
+html[data-skin="classic"] .angle-option,
+html[data-skin="classic"] .history-clear {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+html[data-skin="classic"] .history {
+  background: var(--button);
+  color: var(--text);
+}
+
+html[data-skin="classic"] .history h2,
+html[data-skin="classic"] .history-empty,
+html[data-skin="classic"] .history-expression {
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  html[data-skin="classic"] .app-shell {
+    width: min(94vw, 900px);
+  }
+}

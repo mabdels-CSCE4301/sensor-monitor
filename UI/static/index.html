@@ -57,42 +57,84 @@
       <section
         class="calculator"
         id="calculator"
-        aria-label="Calculator app"
+        aria-label="Scientific calculator"
         aria-busy="false"
         data-loading="false"
       >
+        <div class="angle-mode" role="group" aria-label="Angle mode">
+          <span class="angle-mode-label">Angle</span>
+          <button type="button" class="angle-option" data-angle-mode="DEG" aria-pressed="true">DEG</button>
+          <button type="button" class="angle-option" data-angle-mode="RAD" aria-pressed="false">RAD</button>
+          <span id="angle-mode-indicator" class="angle-mode-indicator" aria-live="polite">DEG</span>
+        </div>
+
         <div class="screen-wrap">
           <div id="expression" class="expression">0</div>
           <div id="display" class="display">0</div>
         </div>
 
-        <div class="keys">
-          <button class="action" data-value="C" aria-label="Clear">C</button>
-          <button class="action" data-value="DEL" aria-label="Delete last digit">DEL</button>
-          <button class="action" data-value="%" aria-label="Percent">%</button>
-          <button class="operator" data-value="/" aria-label="Divide">÷</button>
+        <div class="keys key-group scientific" role="group" aria-label="Scientific functions">
+          <button class="function" data-value="sqrt(" aria-label="Square root">√</button>
+          <button class="function" data-value="xʸ" aria-label="Power">xʸ</button>
+          <button class="function" data-value="eˣ" aria-label="Exponential">eˣ</button>
+          <button class="function" data-value="ln(" aria-label="Natural log">ln</button>
+          <button class="function" data-value="log(" aria-label="Base ten log">log</button>
+          <button class="function" data-value="abs(" aria-label="Absolute value">abs</button>
+          <button class="function" data-value="π" aria-label="Pi">π</button>
+          <button class="function" data-value="e" aria-label="Euler's number">e</button>
+        </div>
 
+        <div class="keys key-group scientific" role="group" aria-label="Trigonometric functions">
+          <button class="function" data-value="sin(" aria-label="Sine">sin</button>
+          <button class="function" data-value="cos(" aria-label="Cosine">cos</button>
+          <button class="function" data-value="tan(" aria-label="Tangent">tan</button>
+          <button class="function" data-value="asin(" aria-label="Inverse sine">sin⁻¹</button>
+          <button class="function" data-value="acos(" aria-label="Inverse cosine">cos⁻¹</button>
+          <button class="function" data-value="atan(" aria-label="Inverse tangent">tan⁻¹</button>
+        </div>
+
+        <div class="keys key-group" role="group" aria-label="Numbers">
           <button data-value="7">7</button>
           <button data-value="8">8</button>
           <button data-value="9">9</button>
-          <button class="operator" data-value="*" aria-label="Multiply">×</button>
-
+          <button class="action" data-value="±" aria-label="Change sign">±</button>
           <button data-value="4">4</button>
           <button data-value="5">5</button>
           <button data-value="6">6</button>
-          <button class="operator" data-value="-" aria-label="Subtract">−</button>
-
+          <button data-value="." aria-label="Decimal point">.</button>
           <button data-value="1">1</button>
           <button data-value="2">2</button>
           <button data-value="3">3</button>
-          <button class="operator" data-value="+" aria-label="Add">+</button>
+          <button data-value="0">0</button>
+        </div>
 
-          <button class="wide" data-value="0">0</button>
-          <button data-value="." aria-label="Decimal point">.</button>
+        <div class="keys key-group" role="group" aria-label="Arithmetic">
+          <button class="operator" data-value="/" aria-label="Divide">÷</button>
+          <button class="operator" data-value="*" aria-label="Multiply">×</button>
+          <button class="operator" data-value="-" aria-label="Subtract">−</button>
+          <button class="operator" data-value="+" aria-label="Add">+</button>
+          <button class="action" data-value="%" aria-label="Modulo">%</button>
+          <button class="function" data-value="x²" aria-label="Square">x²</button>
+          <button class="action" data-value="(" aria-label="Open parenthesis">(</button>
+          <button class="action" data-value=")" aria-label="Close parenthesis">)</button>
+        </div>
+
+        <div class="keys key-group" role="group" aria-label="Evaluation">
+          <button class="action" data-value="C" aria-label="Clear">C</button>
+          <button class="action" data-value="DEL" aria-label="Delete last entry">DEL</button>
           <button class="equals" data-value="=" aria-label="Equals">=</button>
         </div>
 
         <p id="calc-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+      </section>
+
+      <section id="history" class="history" aria-label="Calculation history">
+        <div class="history-header">
+          <h2>History</h2>
+          <button type="button" id="clear-history" class="history-clear">Clear</button>
+        </div>
+        <p id="history-empty" class="history-empty">No calculations yet.</p>
+        <ol id="history-list" class="history-list"></ol>
       </section>
     </main>
 

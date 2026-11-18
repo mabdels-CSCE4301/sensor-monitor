@@ -1,15 +1,24 @@
 const display = document.getElementById('display');
-const expression = document.getElementById('expression');
+const expressionEl = document.getElementById('expression');
 const buttons = document.querySelectorAll('button');
+const keypadButtons = document.querySelectorAll('.keys button');
 const calculator = document.getElementById('calculator');
 const status = document.getElementById('calc-status');
 const skinSelect = document.getElementById('skin-select');
+const angleIndicator = document.getElementById('angle-mode-indicator');
+const historyList = document.getElementById('history-list');
+const historyEmpty = document.getElementById('history-empty');
 
 // The <option> list in index.html is the single registry of available skins.
 const SKINS = skinSelect
   ? Array.from(skinSelect.options).map((option) => option.value)
   : ['default'];
 const SKIN_STORAGE_KEY = 'calculator-skin';
+
+const HISTORY_LIMIT = 50;
+const ANGLE_MODES = ['DEG', 'RAD'];
+const TRAILING_OPERATOR = /[+\-*/%^]$/;
+const TRAILING_OPERAND = /(\d+\.?\d*|pi|e|\))$/;
 
 const state = {
   currentInput: '0',
@@ -18,26 +27,22 @@ const state = {
   resultShown: false,
   isError: false,
   isLoading: false,
+  errorMessage: '',
+  pendingMultiply: false,
+  angleMode: 'DEG',
+  history: [],
+  // 'auto' = inserted by a function key (may be auto-closed); 'user' = explicit.
+  parens: [],
 };
 
-// The error auto-clear is scheduled here so fresh input can cancel it.
-let errorResetTimer = null;
-
-function cancelErrorReset() {
-  if (errorResetTimer !== null) {
-    clearTimeout(errorResetTimer);
-    errorResetTimer = null;
-  }
-}
-
 function updateDisplay() {
-  display.textContent = state.currentInput;
-  expression.textContent = state.expression || '0';
+  display.textContent = state.isError ? state.errorMessage : state.currentInput;
+  expressionEl.textContent = state.expression || '0';
   display.classList.toggle('is-error', state.isError);
 }
 
 function setKeysDisabled(disabled) {
-  buttons.forEach((button) => {
+  keypadButtons.forEach((button) => {
     button.disabled = disabled;
   });
 }
@@ -48,25 +53,61 @@ function announce(message) {
   }
 }
 
+/* Shared expression helpers. */
+
+function endsWithOperand(text) {
+  return /(\d|\.|\))$/.test(text) || /(pi|e)$/.test(text);
+}
+
+function trailingOperand(text) {
+  if (!text) return '0';
+  if (TRAILING_OPERATOR.test(text)) return text.slice(-1);
+  const match = text.match(TRAILING_OPERAND);
+  return match ? match[0] : '0';
+}
+
+/* Close function parentheses only; explicit user parentheses must stay open so
+   an incomplete expression such as "(2+3" still reports an error. */
+function closeOpenParens() {
+  while (
+    state.parens.length > 0 &&
+    state.parens[state.parens.length - 1] === 'auto' &&
+    endsWithOperand(state.expression)
+  ) {
+    state.expression += ')';
+    state.parens.pop();
+  }
+}
+
+function beginEdit() {
+  if (state.isError) {
+    state.isError = false;
+    state.errorMessage = '';
+  }
+}
+
+/* Input handlers. */
+
 function inputDigit(value) {
-  cancelErrorReset();
-  if (state.isError) return;
+  beginEdit();
 
   if (state.resultShown) {
     state.expression = value;
     state.currentInput = value;
     state.resultShown = false;
     state.waitingForNewValue = false;
+    state.pendingMultiply = false;
+    state.parens = [];
     updateDisplay();
     return;
   }
 
   if (state.waitingForNewValue) {
     state.currentInput = value;
-    state.expression += value;
+    state.expression += (state.pendingMultiply ? '*' : '') + value;
+    state.pendingMultiply = false;
     state.waitingForNewValue = false;
   } else if (state.currentInput === '0') {
-    // Replace the leading zero in both strings so "05" never reaches the API.
     state.currentInput = value;
     state.expression = state.expression
       ? state.expression.slice(0, -1) + value
@@ -79,18 +120,20 @@ function inputDigit(value) {
 }
 
 function inputDecimal() {
-  cancelErrorReset();
-  if (state.isError) return;
+  beginEdit();
 
   if (state.resultShown) {
     state.currentInput = '0.';
     state.expression = '0.';
     state.resultShown = false;
     state.waitingForNewValue = false;
+    state.pendingMultiply = false;
+    state.parens = [];
   } else if (state.waitingForNewValue) {
     state.currentInput = '0.';
+    state.expression += (state.pendingMultiply ? '*' : '') + '0.';
+    state.pendingMultiply = false;
     state.waitingForNewValue = false;
-    state.expression = (state.expression || '') + '0.';
   } else if (!state.currentInput.includes('.')) {
     state.currentInput += '.';
     state.expression = state.expression ? state.expression + '.' : '0.';
@@ -99,65 +142,254 @@ function inputDecimal() {
 }
 
 function inputOperator(operator) {
-  cancelErrorReset();
-  if (state.isError) return;
+  beginEdit();
 
-  state.resultShown = false;
-  if (state.expression && /[+\-*/%]$/.test(state.expression)) {
-    state.expression = state.expression.slice(0, -1) + operator;
-  } else {
-    state.expression += operator;
+  if (state.resultShown) {
+    state.expression = state.currentInput;
+    state.resultShown = false;
+    state.parens = [];
   }
-  state.currentInput = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
+
+  if (state.expression && TRAILING_OPERATOR.test(state.expression)) {
+    state.expression = state.expression.slice(0, -1) + operator;
+  } else if (state.expression) {
+    state.expression += operator;
+  } else {
+    state.expression = operator;
+  }
+
+  state.currentInput =
+    operator === '*' ? '×' : operator === '/' ? '÷' : operator === '-' ? '−' : operator;
   state.waitingForNewValue = true;
+  state.pendingMultiply = false;
+  updateDisplay();
+}
+
+function inputParen(paren) {
+  beginEdit();
+
+  if (paren === '(') {
+    if (state.resultShown) {
+      state.expression = '';
+      state.resultShown = false;
+      state.parens = [];
+    }
+    if (state.expression && endsWithOperand(state.expression)) {
+      state.expression += '*';
+    }
+    state.expression += '(';
+    state.parens.push('user');
+    state.currentInput = '(';
+    state.waitingForNewValue = true;
+    state.pendingMultiply = false;
+  } else if (state.expression && endsWithOperand(state.expression)) {
+    state.expression += ')';
+    state.parens.pop();
+    state.currentInput = ')';
+    state.waitingForNewValue = false;
+    state.pendingMultiply = false;
+  }
+  updateDisplay();
+}
+
+function insertFunction(token) {
+  beginEdit();
+
+  if (state.expression && endsWithOperand(state.expression)) {
+    state.expression += '*';
+  }
+  state.expression += token;
+  state.parens.push('auto');
+  state.currentInput = token;
+  state.waitingForNewValue = true;
+  state.pendingMultiply = false;
+  state.resultShown = false;
+  updateDisplay();
+}
+
+function insertConstant(token, symbol) {
+  beginEdit();
+
+  if (state.expression && endsWithOperand(state.expression)) {
+    state.expression += '*';
+  }
+  state.expression += token;
+  state.currentInput = symbol;
+  state.waitingForNewValue = true;
+  state.pendingMultiply = true;
+  state.resultShown = false;
+  updateDisplay();
+}
+
+function applySquare() {
+  beginEdit();
+
+  if (state.resultShown) {
+    state.expression = state.currentInput;
+    state.resultShown = false;
+    state.parens = [];
+  }
+  if (!state.expression || !endsWithOperand(state.expression)) {
+    return;
+  }
+  state.expression += '^2';
+  state.currentInput = '^2';
+  state.waitingForNewValue = true;
+  state.pendingMultiply = false;
+  updateDisplay();
+}
+
+function toggleSign() {
+  beginEdit();
+
+  if (!state.expression) {
+    state.expression = '-';
+    state.currentInput = '-';
+    state.waitingForNewValue = true;
+    updateDisplay();
+    return;
+  }
+
+  const match = state.expression.match(TRAILING_OPERAND);
+  if (!match) return;
+
+  const start = state.expression.length - match[0].length;
+  const before = state.expression.slice(0, start);
+  const prefix = before.slice(0, -1);
+
+  if (before.endsWith('-') && (!prefix || TRAILING_OPERATOR.test(prefix) || prefix.endsWith('('))) {
+    state.expression = prefix + match[0];
+  } else {
+    state.expression = before + '-' + match[0];
+  }
+  state.currentInput = trailingOperand(state.expression);
+  state.waitingForNewValue = false;
+  state.pendingMultiply = false;
   updateDisplay();
 }
 
 function clearAll() {
-  cancelErrorReset();
   state.currentInput = '0';
   state.expression = '';
   state.waitingForNewValue = false;
   state.resultShown = false;
   state.isError = false;
+  state.errorMessage = '';
+  state.pendingMultiply = false;
+  state.parens = [];
   updateDisplay();
 }
 
 function deleteLast() {
-  cancelErrorReset();
-  if (state.isError) return;
+  beginEdit();
 
-  state.resultShown = false;
   if (!state.expression) {
     return;
   }
 
+  state.resultShown = false;
+  state.pendingMultiply = false;
+  const removed = state.expression.slice(-1);
   state.expression = state.expression.slice(0, -1);
+
+  if (removed === '(') {
+    state.parens.pop();
+  } else if (removed === ')') {
+    state.parens.push('user');
+  }
 
   if (!state.expression) {
     state.currentInput = '0';
     state.waitingForNewValue = false;
-  } else if (/[+\-*/%]$/.test(state.expression)) {
-    // Trailing operator: show it and let the next digit start a new operand.
+  } else if (TRAILING_OPERATOR.test(state.expression)) {
     const operator = state.expression.slice(-1);
     state.currentInput = operator === '*' ? '×' : operator === '/' ? '÷' : operator;
     state.waitingForNewValue = true;
   } else {
-    // Otherwise the display mirrors the operand after the last operator.
-    state.currentInput = state.expression.match(/[^+\-*/%]*$/)[0] || '0';
+    state.currentInput = trailingOperand(state.expression);
     state.waitingForNewValue = false;
   }
   updateDisplay();
 }
 
-async function evaluateExpression() {
-  if (state.isError || state.isLoading) return;
+/* Angle mode. */
 
+function setAngleMode(mode, { announce: shouldAnnounce = true } = {}) {
+  if (!ANGLE_MODES.includes(mode)) return;
+  state.angleMode = mode;
+  document.querySelectorAll('.angle-option').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.angleMode === mode));
+  });
+  if (angleIndicator) {
+    angleIndicator.textContent = mode;
+  }
+  if (shouldAnnounce) {
+    announce(`Angle mode ${mode}`);
+  }
+}
+
+/* History. */
+
+function renderHistory() {
+  if (!historyList) return;
+  historyList.textContent = '';
+
+  // Newest first: keep insertion order in state, render backwards.
+  [...state.history].reverse().forEach((entry) => {
+    const item = document.createElement('li');
+    item.className = 'history-entry';
+
+    const expression = document.createElement('span');
+    expression.className = 'history-expression';
+    expression.textContent = entry.expression;
+
+    const result = document.createElement('span');
+    result.className = 'history-result';
+    result.textContent = entry.display;
+
+    item.append(expression, document.createTextNode(' = '), result);
+
+    if (entry.angleMode) {
+      const mode = document.createElement('span');
+      mode.className = 'history-mode';
+      mode.textContent = entry.angleMode;
+      item.append(' ', mode);
+    }
+
+    historyList.append(item);
+  });
+
+  if (historyEmpty) {
+    historyEmpty.hidden = state.history.length > 0;
+  }
+}
+
+function addHistory(expression, data) {
+  const displayValue =
+    data.display !== undefined ? String(data.display) : String(data.result);
+  state.history.push({
+    expression,
+    display: displayValue,
+    angleMode: data.is_trigonometric === true ? data.angle_mode : null,
+  });
+  if (state.history.length > HISTORY_LIMIT) {
+    state.history.splice(0, state.history.length - HISTORY_LIMIT);
+  }
+  renderHistory();
+}
+
+/* Evaluation. */
+
+async function evaluateExpression() {
+  if (state.isLoading) return;
+
+  closeOpenParens();
   const rawExpression = state.expression.replace(/×/g, '*').replace(/÷/g, '/');
   if (!rawExpression) return;
 
-  cancelErrorReset();
   state.isLoading = true;
+  state.isError = false;
+  state.errorMessage = '';
   // Disable the keypad while the request is in flight so no click can mutate
   // state that the response would then overwrite.
   setKeysDisabled(true);
@@ -165,33 +397,34 @@ async function evaluateExpression() {
   calculator.dataset.loading = 'true';
 
   try {
-    const response = await fetch(`/api/calc?expression=${encodeURIComponent(rawExpression)}`);
+    const params = new URLSearchParams({
+      expression: rawExpression,
+      angle_mode: state.angleMode,
+    });
+    const response = await fetch(`/api/calc?${params.toString()}`);
     const data = await response.json();
 
-    if (!response.ok || !data.success) {
+    if (!response.ok || data.success === false) {
       throw new Error(data.detail || 'Calculation failed');
     }
 
-    state.currentInput = String(data.result);
-    state.expression = String(data.result);
+    state.currentInput =
+      data.display !== undefined ? String(data.display) : String(data.result);
     state.waitingForNewValue = true;
     state.resultShown = true;
     state.isError = false;
+    state.pendingMultiply = false;
     updateDisplay();
-    announce(`Result ${data.result}`);
+    announce(`Result ${state.currentInput}`);
+    addHistory(rawExpression, data);
   } catch (error) {
-    state.currentInput = 'Error';
-    state.expression = 'invalid';
-    state.waitingForNewValue = true;
-    state.resultShown = false;
     state.isError = true;
+    state.errorMessage = error.message || 'Calculation failed';
+    state.currentInput = trailingOperand(state.expression);
+    state.waitingForNewValue = TRAILING_OPERATOR.test(state.expression);
+    state.resultShown = false;
     updateDisplay();
-    announce(`Error: ${error.message || 'Calculation failed'}`);
-    cancelErrorReset();
-    errorResetTimer = setTimeout(() => {
-      errorResetTimer = null;
-      clearAll();
-    }, 800);
+    announce(`Error: ${state.errorMessage}`);
   } finally {
     state.isLoading = false;
     setKeysDisabled(false);
@@ -200,16 +433,31 @@ async function evaluateExpression() {
   }
 }
 
+/* Controls. */
+
 buttons.forEach((button) => {
   button.addEventListener('click', (event) => {
-    const value = button.dataset.value;
-
     // Pointer clicks leave focus on the key, which would make a later physical
     // Enter re-activate that key instead of evaluating. Keyboard activation
     // (event.detail === 0) keeps focus for native Enter/Space behavior.
     if (event.detail > 0) {
       button.blur();
     }
+
+    if (button.dataset.angleMode) {
+      setAngleMode(button.dataset.angleMode);
+      return;
+    }
+
+    if (button.id === 'clear-history') {
+      state.history = [];
+      renderHistory();
+      announce('History cleared');
+      return;
+    }
+
+    const value = button.dataset.value;
+    if (value === undefined) return;
 
     if (!isNaN(Number(value)) || value === '.') {
       if (value === '.') {
@@ -230,8 +478,31 @@ buttons.forEach((button) => {
       case '=':
         evaluateExpression();
         break;
+      case '±':
+        toggleSign();
+        break;
+      case 'x²':
+        applySquare();
+        break;
+      case 'xʸ':
+        inputOperator('^');
+        break;
+      case 'π':
+        insertConstant('pi', 'π');
+        break;
+      case 'e':
+        insertConstant('e', 'e');
+        break;
+      case '(':
+      case ')':
+        inputParen(value);
+        break;
       default:
-        inputOperator(value);
+        if (value.endsWith('(')) {
+          insertFunction(value);
+        } else {
+          inputOperator(value);
+        }
         break;
     }
   });
@@ -256,6 +527,9 @@ const KEY_VALUES = {
   '/': '/',
   '%': '%',
   '.': '.',
+  '(': '(',
+  ')': ')',
+  '^': 'xʸ',
   '=': '=',
   Enter: '=',
   Escape: 'C',
@@ -328,4 +602,6 @@ if (skinSelect) {
   });
 }
 
+setAngleMode(state.angleMode, { announce: false });
+renderHistory();
 updateDisplay();

@@ -369,3 +369,29 @@ html[data-skin="modern"] .equals:hover {
     opacity: 0.8;
   }
 }
+
+/* Scientific calculator controls */
+
+html[data-skin="modern"] .angle-option,
+html[data-skin="modern"] .history-clear {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+html[data-skin="modern"] .history {
+  background: var(--button);
+  color: var(--text);
+}
+
+html[data-skin="modern"] .history h2,
+html[data-skin="modern"] .history-empty,
+html[data-skin="modern"] .history-expression {
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  html[data-skin="modern"] .app-shell {
+    width: min(94vw, 900px);
+  }
+}

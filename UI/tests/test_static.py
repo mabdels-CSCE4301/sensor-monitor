@@ -57,6 +57,24 @@ def test_index_serves_skin_switcher():
     assert "/static/skins/modern.css" in html
 
 
+def test_index_serves_scientific_controls_and_history():
+    client = app.test_client()
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'id="angle-mode-indicator"' in html
+    assert 'data-angle-mode="DEG"' in html
+    assert 'data-angle-mode="RAD"' in html
+    assert 'aria-label="Scientific functions"' in html
+    for token in ('sin(', 'cos(', 'tan(', 'asin(', 'acos(', 'atan('):
+        assert f'data-value="{token}"' in html
+    assert 'id="history"' in html
+    assert 'id="history-list"' in html
+    assert 'id="clear-history"' in html
+
+
 def test_classic_skin_is_served_and_scoped():
     client = app.test_client()
 
